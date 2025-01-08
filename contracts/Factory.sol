@@ -13,6 +13,8 @@ contract Factory {
     error Factory__BuyingClosed();
     error Factory__AmountTooLow();
     error Factory__AmountTooHigh();
+    error Factory__BuyingIsOpen();
+    error Factory__TransferEtherFaild();
 
     /*//////////////////////////////////////////////////////////////
                                  TYPES
@@ -116,9 +118,21 @@ contract Factory {
         // Would go into a liquidity pool like UniSwap V3.
         // For simplicity, we will just transfer remaining
         // tokens and ETH to the creator
+
+        Token token = Token(_token);
+        TokenSale memory sale = tokenToSale[_token];
+        if (sale.isOpen) {
+            revert Factory__BuyingIsOpen();
+        }
+        token.transfer(sale.creator, token.balanceOf(address(this)));
+
+        (bool success,) = payable(sale.creator).call{value: sale.raised}("");
+        if (!success) {
+            revert Factory__TransferEtherFaild();
+        }
     }
 
-    function getCost(uint256 _sold) internal pure returns (uint256) {
+    function getCost(uint256 _sold) public pure returns (uint256) {
         uint256 floor = 0.0001 ether;
         uint256 step = 0.0001 ether;
         uint256 increment = 10000 ether;
@@ -126,11 +140,10 @@ contract Factory {
         uint256 cost = (step * (_sold / increment)) + floor;
         return cost;
     }
-    
+
     /*//////////////////////////////////////////////////////////////
                      PUBLIC & EXTERNAL VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-
 
     function getTokenSale(uint256 _index) public view returns (TokenSale memory) {
         return tokenToSale[tokens[_index]];

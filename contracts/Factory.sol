@@ -14,7 +14,9 @@ contract Factory {
     error Factory__AmountTooLow();
     error Factory__AmountTooHigh();
     error Factory__BuyingIsOpen();
-    error Factory__TransferEtherFaild();
+    error Factory__TransferEtherFailed();
+    error Factory__MustBeTheOwner();
+    error Factory__InsufficientEtherToWithdraw();
 
     /*//////////////////////////////////////////////////////////////
                                  TYPES
@@ -128,7 +130,21 @@ contract Factory {
 
         (bool success,) = payable(sale.creator).call{value: sale.raised}("");
         if (!success) {
-            revert Factory__TransferEtherFaild();
+            revert Factory__TransferEtherFailed();
+        }
+    }
+
+    function withdraw(uint256 _amount) external {
+        if (msg.sender != owner) {
+            revert Factory__MustBeTheOwner();
+        }
+        if (_amount > address(this).balance) {
+            revert Factory__InsufficientEtherToWithdraw();
+        }
+
+        (bool success,) = payable(owner).call{value: _amount}("");
+        if (!success) {
+            revert Factory__TransferEtherFailed();
         }
     }
 

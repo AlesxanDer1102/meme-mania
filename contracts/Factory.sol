@@ -9,6 +9,10 @@ contract Factory {
     //////////////////////////////////////////////////////////////*/
 
     error Factory__InsufficientFee();
+    error Factory__InsufficientEtherSend();
+    error Factory__BuyingClosed();
+    error Factory__AmountTooLow();
+    error Factory__AmountTooHigh();
 
     /*//////////////////////////////////////////////////////////////
                                  TYPES
@@ -26,6 +30,9 @@ contract Factory {
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
+
+    uint256 public constant TARGET = 3 ether;
+    uint256 public constant TOKEN_LIMIT = 500_000 ether;
 
     uint256 public fee;
     address public owner;
@@ -72,15 +79,58 @@ contract Factory {
     function buy(address _token, uint256 _amount) external payable {
         TokenSale storage sale = tokenToSale[_token];
 
+        if (sale.isOpen == false) {
+            revert Factory__BuyingClosed();
+        }
+        if (_amount < 1 ether) {
+            revert Factory__AmountTooLow();
+        }
+        if (_amount > 10000 ether) {
+            revert Factory__AmountTooHigh();
+        }
+
+        //Calculete the price of 1 token based uponn total bought
+        uint256 cost = getCost(sale.sold);
+
+        uint256 price = cost * (_amount / 1e18);
+
+        //Make sure enough ether was sent
+        if (msg.value < price) {
+            revert Factory__InsufficientEtherSend();
+        }
+
         sale.sold += _amount;
+        sale.raised += price;
+
+        //Make sure funds raising goal isn't met
+        if (sale.raised >= TARGET || sale.sold >= TOKEN_LIMIT) {
+            sale.isOpen = false;
+        }
 
         Token(_token).transfer(msg.sender, _amount);
         emit Buy(_token, _amount);
     }
 
+    function deposit(address _token) external {
+        // The remain token balance and the ETH raised
+        // Would go into a liquidity pool like UniSwap V3.
+        // For simplicity, we will just transfer remaining
+        // tokens and ETH to the creator
+    }
+
+    function getCost(uint256 _sold) internal pure returns (uint256) {
+        uint256 floor = 0.0001 ether;
+        uint256 step = 0.0001 ether;
+        uint256 increment = 10000 ether;
+
+        uint256 cost = (step * (_sold / increment)) + floor;
+        return cost;
+    }
+    
     /*//////////////////////////////////////////////////////////////
                      PUBLIC & EXTERNAL VIEW FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
 
     function getTokenSale(uint256 _index) public view returns (TokenSale memory) {
         return tokenToSale[tokens[_index]];
